@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tržní přehled</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#eef1ef;--panel:#fafbfa;--ink:#16222c;--mute:#61707c;--line:#d5dcd8;
+--green:#2b7a4b;--yellow:#b98300;--red:#b93a2e;--neutral:#8a97a1;color-scheme:light}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#10171c;--panel:#172027;--ink:#e6ecef;--mute:#92a1ab;--line:#26323b;
+--green:#4fb77a;--yellow:#e0ad2b;--red:#e5675a;--neutral:#6d7c87;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#10171c;--panel:#172027;--ink:#e6ecef;--mute:#92a1ab;--line:#26323b;
+--green:#4fb77a;--yellow:#e0ad2b;--red:#e5675a;--neutral:#6d7c87;color-scheme:dark}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 "IBM Plex Sans",system-ui,sans-serif;font-variant-numeric:tabular-nums;
+padding:env(safe-area-inset-top,0) 0 env(safe-area-inset-bottom,0)}
+main{max-width:1060px;margin:0 auto;padding:28px 18px 60px}
+header{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap}
+h1{font-size:15px;font-weight:600;margin:0;color:var(--mute)}
+.upd{font-size:13px;color:var(--mute)}
+button{font:inherit;font-size:13px;color:var(--mute);background:none;border:1px solid var(--line);border-radius:6px;padding:3px 10px;cursor:pointer}
+button:focus-visible,.row:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+.hero{margin:22px 0 34px}
+.hero p{font-size:clamp(24px,4.4vw,38px);line-height:1.2;font-weight:500;margin:0 0 18px;max-width:22em}
+.bar{display:flex;height:14px;border-radius:3px;overflow:hidden;gap:2px;max-width:560px}
+.bar span{display:block;min-width:4px}
+.legend{display:flex;gap:18px;margin-top:10px;font-size:13px;color:var(--mute)}
+.dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;background:var(--neutral)}
+.green{--c:var(--green)}.yellow{--c:var(--yellow)}.red{--c:var(--red)}.neutral{--c:var(--neutral)}
+.dot.green,.bar .green{background:var(--green)}.dot.yellow,.bar .yellow{background:var(--yellow)}.dot.red,.bar .red{background:var(--red)}
+section{margin-top:30px}
+h2{font-size:17px;font-weight:600;margin:0 0 6px}
+.cols,.row{display:grid;grid-template-columns:minmax(190px,2.3fr) 1fr repeat(4,.7fr) 120px 52px;gap:10px;align-items:center}
+.cols{font-size:12px;color:var(--mute);padding:4px 12px}
+.cols span:not(:first-child){text-align:right}
+.row{background:var(--panel);border-top:1px solid var(--line);padding:11px 12px;cursor:pointer;border-left:4px solid var(--c)}
+.row:last-child{border-bottom:1px solid var(--line)}
+.name{font-weight:500}
+.desc{grid-column:1/-1;font-size:13px;color:var(--mute);display:none;padding:2px 0 2px 0}
+.row.open .desc{display:block}
+.val{text-align:right;font-weight:600;font-size:16px}
+.ch{text-align:right;font-size:13.5px}
+.up{color:var(--green)}.dn{color:var(--red)}.flat{color:var(--mute)}
+svg.spark{width:120px;height:32px;display:block}
+.pc{text-align:right;font-size:13px;color:var(--mute)}
+.hl{display:none;font-size:12px;color:var(--mute)}
+@media (max-width:760px){
+.cols{display:none}
+.row{grid-template-columns:1fr auto;row-gap:6px}
+.ch,.pc,svg.spark{display:none}
+.row.open .ch,.row.open .pc,.row.open svg.spark{display:block}
+.row.open .ch{text-align:left}.hl{display:inline;margin-right:6px}
+.row.open .ch{grid-column:span 1}
+}
+footer{margin-top:40px;font-size:12.5px;color:var(--mute);max-width:60em}
+</style>
+</head>
+<body>
+<main>
+<header>
+  <h1>Tržní přehled</h1>
+  <div><span class="upd" id="upd"></span> <button id="theme" type="button">Změnit vzhled</button></div>
+</header>
+<div class="hero">
+  <p id="headline"></p>
+  <div class="bar" id="bar"></div>
+  <div class="legend" id="legend"></div>
+</div>
+<div id="groups"></div>
+<footer>Data: Yahoo Finance a FRED, denní uzavření (zpoždění o jeden obchodní den). Barvy vyjadřují jednoduchá pravidla, ne investiční doporučení. „Percentil“ říká, kolik procent hodnot za poslední rok bylo nižších než dnešní. Kliknutím na řádek zobrazíš vysvětlení.</footer>
+</main>
+<script src="data.js"></script>
+<script>
+const D = window.DASHBOARD, $ = id => document.getElementById(id);
+if (!D) { document.body.innerHTML = "<main><p>Chybí soubor data.js. Nejdřív spusť <code>python fetch_data.py</code>.</p></main>"; throw new Error("data.js missing"); }
+const nf = (v, d) => v.toLocaleString("cs-CZ", {minimumFractionDigits: d, maximumFractionDigits: d});
+
+function chg(v, kind) {
+  if (v == null) return '<span class="flat">–</span>';
+  const cls = v > 0 ? "up" : v < 0 ? "dn" : "flat", sign = v > 0 ? "+" : "";
+  return `<span class="${cls}">${sign}${nf(v, kind === "bp" ? 0 : 2)}${kind === "bp" ? " bp" : " %"}</span>`;
+}
+function spark(a) {
+  const min = Math.min(...a), max = Math.max(...a), r = max - min || 1;
+  const pts = a.map((v, i) => `${(i / (a.length - 1) * 120).toFixed(1)},${(30 - (v - min) / r * 28).toFixed(1)}`).join(" ");
+  const last = pts.split(" ").pop().split(",");
+  return `<svg class="spark" viewBox="0 0 120 32" aria-hidden="true"><polyline points="${pts}" fill="none" stroke="var(--c)" stroke-width="1.6"/><circle cx="${last[0]}" cy="${last[1]}" r="2.4" fill="var(--c)"/></svg>`;
+}
+
+const s = D.score, total = s.green + s.yellow + s.red;
+$("upd").textContent = "Aktualizováno " + D.updated;
+$("headline").textContent = s.red >= s.green + 2 ? "Trh vysílá převážně varovné signály."
+  : s.green >= s.red + 2 ? "Většina ukazatelů podporuje růst." : "Signály jsou smíšené.";
+$("bar").innerHTML = ["green", "yellow", "red"].filter(k => s[k]).map(k => `<span class="${k}" style="flex:${s[k]}"></span>`).join("");
+$("legend").innerHTML = [["green", "příznivé"], ["yellow", "opatrnost"], ["red", "varování"]]
+  .map(([k, t]) => `<span><i class="dot ${k}"></i>${s[k]} ${t}</span>`).join("") + `<span>z ${total} hodnocených</span>`;
+
+const groups = {};
+D.metrics.forEach(m => (groups[m.group] ||= []).push(m));
+$("groups").innerHTML = Object.entries(groups).map(([g, ms]) => `
+<section><h2>${g}</h2>
+<div class="cols"><span>Ukazatel</span><span>Hodnota</span><span>1D</span><span>5D</span><span>1M</span><span>3M</span><span>6 měsíců</span><span>Percentil</span></div>
+${ms.map(m => `<div class="row ${m.status}" tabindex="0" role="button" aria-expanded="false">
+<div class="name">${m.name}</div>
+<div class="val">${nf(m.value, m.digits)}</div>
+${["1D", "5D", "1M", "3M"].map(k => `<div class="ch"><span class="hl">${k}</span>${chg(m.chg[k], m.kind)}</div>`).join("")}
+${spark(m.series)}
+<div class="pc"><span class="hl">Percentil</span>${m.pctile}.</div>
+<div class="desc">${m.desc}</div></div>`).join("")}
+</section>`).join("");
+
+document.querySelectorAll(".row").forEach(r => {
+  const t = () => { r.classList.toggle("open"); r.setAttribute("aria-expanded", r.classList.contains("open")); };
+  r.addEventListener("click", t);
+  r.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); t(); } });
+});
+$("theme").addEventListener("click", () => {
+  const root = document.documentElement, dark = matchMedia("(prefers-color-scheme: dark)").matches;
+  const cur = root.dataset.theme || (dark ? "dark" : "light");
+  root.dataset.theme = cur === "dark" ? "light" : "dark";
+});
+</script>
+</body>
+</html>
