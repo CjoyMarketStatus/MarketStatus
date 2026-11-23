@@ -1,0 +1,2 @@
+# MarketStatus
+Indikátory kapitálových trhů
